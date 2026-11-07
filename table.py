@@ -1,11 +1,12 @@
 from game_files.player import Player
-from dealer import Dealer
+from game_files.dealer import Dealer
 
 class Table:
 
     players: list[Player]
+    
     def __init__(self, tableName):
-        self.table_id = tableName
+        self.tableName = tableName
         self.players = []
         self.dealer = Dealer()
         self.prizePot = 0

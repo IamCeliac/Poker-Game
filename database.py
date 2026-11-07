@@ -13,14 +13,17 @@ class Database:
             username TEXT NOT NULL,
             password TEXT NOT NULL,
             balance INTEGER,
-            isLoggedIn BOOLEAN DEFAULT 0,
-            
+            isLoggedIn BOOLEAN DEFAULT 0
         )
         """
         self.cursor.execute(query)
         self.conn.commit()
         print("Table created successfully.")
 
+    def reset_all_logins(self):
+        """Run this once when server.py starts to clear any stuck logins from crashes."""
+        self.cursor.execute("UPDATE users SET isLoggedIn = 0")
+        self.conn.commit()
    
 
         
