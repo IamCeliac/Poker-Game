@@ -6,6 +6,7 @@ from user_files.user import User
 from game_files.game import Game
 from game_files.round import RoundStage
 
+
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 5555
 
@@ -59,7 +60,7 @@ def handle_client(client_socket,client_address):
                             "type": "signin_success",
                             "username": current_player.username,
                             "balance": current_player.currentBalance,
-                            "open_tables": [{"table_name": t.tableName, "creator": t.creator }for t in Game.openTables]
+                            "open_tables": [{"table_name": t.tableName, "creator": t.creator, "min_bet": t.min_bet }for t in Game.openTables]
                         })
 
                     
@@ -72,6 +73,11 @@ def handle_client(client_socket,client_address):
                         current_username = data["current_username"]
                         new_username = data["new_username"]
                         current_player.ChangeUsername(current_username, new_username)
+
+                        if current_username in connected_clients:
+                            del connected_clients[current_username]
+                        connected_clients[new_username] = client_socket
+
                         send_to_client(client_socket,{
                             "status": "ok",
                             "type": "change_username_success",
@@ -108,17 +114,21 @@ def handle_client(client_socket,client_address):
                     # --- 3. CREATE TABLE ---
                     elif action == "create_table":
                         table_name = data["table_name"]
+                        min_bet = int(data.get("min_bet",20))
                         if not current_player.isTableCreated:
-                            current_player.CreateTable(table_name)
+                            current_player.CreateTable(table_name,min_bet)
                             current_player.isTableCreated = True
-                            send_to_client(client_socket,{
+                        else:
+                            raise ValueError("Player can only create one table.")
+                        send_to_client(client_socket,{
                                 "status": "ok",
                                 "type": "table_joined",
                                 "table_name": table_name,
+                                "min_bet": min_bet,
                                 "creator": current_player.username,
                                 "players": [current_player.username]
-                            })
-                        else: raise ValueError("Player can only create one table.")
+                        })
+                        
 
                     # --- 4. JOIN EXISTING TABLE ---
                     elif action == "join_table":
@@ -137,6 +147,49 @@ def handle_client(client_socket,client_address):
                             "players": [p.username for p in table.players]
                         })
 
+                    elif action == "leave_table":
+                        table_name = current_player.currentTableName
+                        if not table_name:
+                            raise ValueError("You are not sitting at a table")
+                        current_round = active_rounds.get(table_name)
+                        if current_round is not None:
+                            current_round.handle_player_disconnect(current_player)
+                            broadcast_game_state(table_name, f"{current_player.username} left the table and folded.")
+                            if current_round.roundStage == RoundStage.FINISHED:
+                                del active_rounds[table_name]
+
+                        current_player.ExitGame()
+                        table = current_player.RemovePlayerFromTable()
+
+                        send_to_client(client_socket,{
+                            "status": "ok",
+                            "type": "left_table",
+                            "username": current_player.username,
+                            "balance": current_player.currentBalance,
+                            "open_tables": [
+                                {"table_name": t.tableName, "creator": t.creator, "min_bet": t.min_bet}
+                                for t in Game.openTables
+                            ]
+                        })
+
+                        if table is not None and table in Game.openTables:
+                            broadcast_to_table(table_name,{
+                                "status": "ok",
+                                "type": "player_left",
+                                "table_name": table_name,
+                                "players": [p.username for p in table.players]
+                            })
+
+                    elif action == "get_tables":
+                        send_to_client(client_socket,{
+                            "status": "ok",
+                            "type": "get_tables_list",
+                            "open_tables": [
+                                {"table_name": t.tableName, "creator": t.creator, "min_bet": t.min_bet}
+                                for t in Game.openTables
+                            ]
+                        })
+
                     # --- 5. DELETE TABLE ---
                     elif action == "delete_table":
                         table_name = data["table_name"]
@@ -150,9 +203,6 @@ def handle_client(client_socket,client_address):
                             "table_name": table_name
                         })
 
-                    
-
-
                     # --- 6. START ROUND ---
                     elif action == "start_round":
                         table_name = current_player.currentTableName
@@ -163,7 +213,7 @@ def handle_client(client_socket,client_address):
                         if table.creator != current_player.username:
                             raise ValueError("Only the table creator is allowd to start a round")
 
-                        if table.name in active_rounds:
+                        if table.tableName in active_rounds:
                             raise ValueError("A round is already in progress!")
 
                         game = Game()
@@ -195,6 +245,15 @@ def handle_client(client_socket,client_address):
                         if current_round.roundStage == RoundStage.FINISHED:
                             del active_rounds[table_name]
 
+                    elif action == "refill_balance":
+                        new_balance = current_player.RefillBalance()
+                        send_to_client(client_socket, {
+                            "status": "ok",
+                            "type": "refill_success",
+                            "balance": new_balance,
+                            "message": "Your balance has been refilled to 500 chips."
+                        })
+
                     else:
                         raise ValueError(f"Unknown action: {action}")
 
@@ -209,10 +268,25 @@ def handle_client(client_socket,client_address):
     except Exception as e:
         print(f"[ERROR] {client_address}: {e}")
     finally:
-        # 3. Cleanup when the loop breaks (player disconnects)
+        # Cleanup when the loop breaks (player disconnects)
         if current_player is not None:
-            if current_player.currentTableName:
+            table_name = current_player.currentTableName
+            if table_name:
+                current_round = active_rounds.get(table_name)
+                if current_round is not None:
+                    current_round.handle_player_disconnect(current_player)
+                    broadcast_game_state(table_name, f"{current_player.username} disconnected and folded.")
+                    if current_round.roundStage == RoundStage.FINISHED:
+                        del active_rounds[table_name]
+
                 current_player.RemovePlayerFromTable()
+                broadcast_to_table(table_name, {
+                    "status": "ok",
+                    "type": "player_left",
+                    "table_name": table_name,
+                    "players": [p.username for p in Game.GetTableByName(table_name).players]
+                } if Game.GetTableByName(table_name) else {})
+
             User.LogOutUser(current_player)
             if current_player.username in connected_clients:
                 del connected_clients[current_player.username]

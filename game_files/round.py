@@ -27,15 +27,46 @@ class Round:
     def start_round(self):
         if len(self.active_players) < 2:
             raise ValueError("Not enough players to start the round.")
-        self.table.dealer.ShuffleDeck()
+
+        required_chips = self.table.min_bet * 2
+        for player in self.active_players:
+            if player.currentBalance < required_chips:
+                raise ValueError(
+                    f"{player.username} only has {player.currentBalance} chips and needs {required_chips} (2x min bet) to play."
+                )
+        
+        self.table.dealer.ResetDealer()
         self.playersActedThisStreet.clear()
+
         for player in self.active_players:
             player.isPlayerTurn = False
             player.currentStreetbet = 0
             player.currentHand = [self.table.dealer.DealCard(), self.table.dealer.DealCard()]
 
-        self.currentPlayerTurnIndex = 0
-        self.active_players[0].isPlayerTurn = True
+
+        num_players = len(self.active_players)
+        sb_index = self.table.dealer_button_index % num_players
+        bb_index = (sb_index +1) % num_players
+        first_turn_index = (bb_index + 1) % num_players
+        self.table.dealer_button_index = (self.table.dealer_button_index + 1) % num_players
+
+        small_blind = self.table.min_bet // 2
+        big_blind = self.table.min_bet
+
+        sb_player = self.active_players[sb_index]
+        bb_player = self.active_players[bb_index]
+
+        sb_player.currentBalance -= small_blind
+        sb_player.currentStreetbet = small_blind
+
+        bb_player.currentBalance -= big_blind
+        bb_player.currentStreetbet = big_blind
+
+        self.pot = small_blind + big_blind
+        self.current_bet = big_blind
+
+        self.currentPlayerTurnIndex = first_turn_index
+        self.active_players[self.currentPlayerTurnIndex].isPlayerTurn = True
 
     def advance_stage(self):
 
@@ -89,7 +120,7 @@ class Round:
         elif action == "call":
             if owed <= 0:
                 raise ValueError("Nothing to call. You can check or bet.")
-            if owed >= player.currentStreetbet:
+            if owed >= player.currentBalance:
                 chips = player.AllIn()
             else:
                 chips = player.PlaceBet(owed)
@@ -109,9 +140,9 @@ class Round:
                 raise ValueError("No bet to raise. Use 'bet' instead.")
             if amount <= self.current_bet:
                 raise ValueError(f"Raise must be greater than current bet ({self.current_bet}).")
-            to_add = amount - player.currentStreetBet
+            to_add = amount - player.currentStreetbet
             chips = player.PlaceBet(to_add)
-            self.current_bet = player.currentStreetBet
+            self.current_bet = player.currentStreetbet
             self.pot += chips
             self.playersActedThisStreet = {player.username}
 
@@ -168,7 +199,7 @@ class Round:
             return
 
         all_matched = all(
-            p.username in self.players_acted_this_street and p.currentStreetBet == self.current_bet
+            p.username in self.playersActedThisStreet and p.currentStreetbet == self.current_bet
             for p in can_act
         )
 
@@ -261,6 +292,27 @@ class Round:
         self.active_players = [player for player in self.active_players if not player.isFolded]
         if self.currentPlayerTurnIndex >= len(self.active_players):
             self.currentPlayerTurnIndex = 0
+
+    def handle_player_disconnect(self,player: Player):
+        if player not in self.active_players or player.isFolded or self.roundStage == RoundStage.FINISHED:
+            return
+
+        if player.isPlayerTurn:
+            self.handle_player_action(player,"fold")
+            return
+
+        player.Fold()
+        unfolded_players = [p for p in self.active_players if not p.isFolded]
+        if len(unfolded_players) <= 1:
+            winner = unfolded_players[0]
+            winner.currentBalance += self.pot
+            for p in self.active_players:
+                p.isPlayerTurn = False
+                p.isFolded = False
+                p.currentHand = []
+                User.UpdateUserBalance(p.username,p.currentBalance)
+            self.table.dealer.tableCards = []
+            self.roundStage = RoundStage.FINISHED
 
     def add_to_pot(self):
         if self.current_bet < 0:

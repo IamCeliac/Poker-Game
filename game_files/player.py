@@ -61,23 +61,39 @@ class Player:
         self.currentStreetbet += allInAmount
         return allInAmount
 
-    def CreateTable(self, tableName):
-
+    def CreateTable(self, tableName, min_bet=20):
         from game_files.game import Game
         from game_files.table import Table
+
+        if min_bet % 2 != 0:
+            raise ValueError("Minimum bet has to be an even number!")
+
+        if min_bet < 10 or min_bet > 1000:
+            raise ValueError("Minimum bet must be within 10 and 1000")
 
         if not self.isTableCreated:
             if Game.GetTableByName(tableName) is not None:
                 raise ValueError("Table already exists!")
             
             self.currentTableName = tableName
-            table = Table(tableName,self.username)
+            table = Table(tableName,self.username,min_bet)
             table.add_player(self)
             Game.openTables.append(table)
             self.isTableCreated = True
             return table
         else: 
             raise ValueError("Player Already Created Table!")
+
+
+    def RefillBalance(self):
+        from user_files.user import User
+        if self.currentBalance >=100:
+            raise ValueError("You can only refill chips when your balance is under 100.")
+        if self.currentTableName != "":
+            raise ValueError("You must leave the table before refilling your chips.")
+        self.currentBalance = 500
+        User.UpdateUserBalance(self.username, self.currentBalance)
+        return self.currentBalance
 
     def ChangeUsername(self,username, newUsername):
         from user_files.user import User
