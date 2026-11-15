@@ -30,3 +30,14 @@ class Card:
     def __repr__(self):
         return f"{self.cardNumber.value} of {self.cardSuit.value}" 
         # (Change self.rank and self.suit to whatever variable names you used in Card.__init__!)
+
+    def get_value(self) -> int:
+        face_values = {
+            "Jack": 11,
+            "Queen": 12,
+            "King": 13,
+            "Ace": 14
+        }
+        if isinstance(self.cardNumber.value, int):
+            return self.cardNumber.value
+        return face_values[self.cardNumber.value]
