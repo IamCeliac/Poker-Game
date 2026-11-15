@@ -1,6 +1,4 @@
 import sqlite3
-import socket
-import json
 from game_files.player import Player
 
 class User:
@@ -100,13 +98,13 @@ class User:
         conn.close()
 
     
-    def GetUserBalance(self,username):
+    def GetUserBalance(self):
        
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
         cursor.execute(
             "SELECT balance, isLoggedIn FROM users WHERE username = ?",
-            (username,)
+            (self.username,)
         )
         output = cursor.fetchone()
         conn.close()
