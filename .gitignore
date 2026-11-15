@@ -1,3 +1,6 @@
 # ignore all .pyc and log files
 * .pyc
 * .log
+.vscode/
+__pycache__/
+*.py[cod]
