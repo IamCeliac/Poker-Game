@@ -71,6 +71,9 @@ class Player:
         if min_bet < 10 or min_bet > 1000:
             raise ValueError("Minimum bet must be within 10 and 1000")
 
+        if not any(t.creator == self.username for t in Game.openTables):
+            self.isTableCreated = False
+
         if not self.isTableCreated:
             if Game.GetTableByName(tableName) is not None:
                 raise ValueError("Table already exists!")

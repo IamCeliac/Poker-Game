@@ -7,7 +7,7 @@ from game_files.game import Game
 from game_files.round import RoundStage
 
 
-SERVER_IP = '127.0.0.1'
+SERVER_IP = '0.0.0.0'
 SERVER_PORT = 5555
 
 connected_clients = {} # Format {"username": client_socket}
@@ -115,11 +115,8 @@ def handle_client(client_socket,client_address):
                     elif action == "create_table":
                         table_name = data["table_name"]
                         min_bet = int(data.get("min_bet",20))
-                        if not current_player.isTableCreated:
-                            current_player.CreateTable(table_name,min_bet)
-                            current_player.isTableCreated = True
-                        else:
-                            raise ValueError("Player can only create one table.")
+                        current_player.CreateTable(table_name,min_bet)
+                        
                         send_to_client(client_socket,{
                                 "status": "ok",
                                 "type": "table_joined",

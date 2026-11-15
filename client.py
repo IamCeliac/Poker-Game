@@ -4,8 +4,10 @@ import socket
 import threading
 import queue
 import json
-from server import SERVER_IP, SERVER_PORT
 
+
+SERVER_IP = "84.94.241.49"
+SERVER_PORT = 5555
 
 class MainApplication(tk.Tk):
     def __init__(self):
