@@ -7,6 +7,7 @@ class Player:
     def __init__(self,username,balance):
         self.username = username
         self.currentBalance = balance
+        self.currentStreetbet = 0
         self.currentTableName = ''
         self.isPlayerTurn = False
         self.isFolded = False
@@ -23,6 +24,7 @@ class Player:
         if betAmount > self.currentBalance:
             raise ValueError("Insufficient balance to place the bet.")
         self.currentBalance -= betAmount
+        self.currentStreetbet += betAmount
         return betAmount
 
     def Fold(self):
@@ -56,6 +58,7 @@ class Player:
             raise ValueError("Player has folded and cannot go all-in.")
         allInAmount = self.currentBalance
         self.currentBalance = 0
+        self.currentStreetbet += allInAmount
         return allInAmount
 
     def CreateTable(self, tableName):

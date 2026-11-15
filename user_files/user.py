@@ -69,7 +69,7 @@ class User:
             conn.close()
             
             print(f"User {self.username} logged in successfully.")
-            return Player(self.username,self.GetUserBalance(self.username))
+            return Player(self.username,self.GetUserBalance())
             
 
     @staticmethod

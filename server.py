@@ -4,6 +4,7 @@ import json
 from database.database import Database
 from user_files.user import User
 from game_files.game import Game
+from game_files.round import RoundStage
 
 SERVER_IP = '127.0.0.1'
 SERVER_PORT = 5555
@@ -159,6 +160,12 @@ def handle_client(client_socket,client_address):
                         if table is None:
                             raise ValueError("You are not sitting at a table.")
 
+                        if table.creator != current_player.username:
+                            raise ValueError("Only the table creator is allowd to start a round")
+
+                        if table.name in active_rounds:
+                            raise ValueError("A round is already in progress!")
+
                         game = Game()
                         new_round = game.start_game(table)
                         new_round.start_round()
@@ -184,6 +191,9 @@ def handle_client(client_socket,client_address):
                             table_name,
                             f"{current_player.username} chose {move} ({amount})"
                         )
+
+                        if current_round.roundStage == RoundStage.FINISHED:
+                            del active_rounds[table_name]
 
                     else:
                         raise ValueError(f"Unknown action: {action}")
