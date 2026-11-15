@@ -164,6 +164,7 @@ class Round:
         ):
             while self.roundStage != RoundStage.SHOWDOWN:
                 self.advance_stage()
+            self.resolve_showdown()
             return
 
         all_matched = all(
@@ -174,6 +175,7 @@ class Round:
         if all_matched:
             self.advance_stage()
             if self.roundStage == RoundStage.SHOWDOWN:
+                self.resolve_showdown()
                 return
             for idx, p in enumerate(self.active_players):
                 if not p.isFolded and p.currentBalance > 0:
@@ -189,6 +191,31 @@ class Round:
                 next_player.isPlayerTurn = True
                 break
 
+    def resolve_showdown(self):
+        unfolded_players = [p for p in self.active_players if not p.isFolded]
+        
+        player_scores = {
+            p: self.table.dealer.get_best_hand(p.currentHand)
+            for p in unfolded_players
+        }
+        best_score = max(player_scores.values())
+        winners = [p for p, score in player_scores.items() if score == best_score]
+
+        share = self.pot // len(winners)
+        remainder = self.pot % len(winners)
+
+        for idx, winner in enumerate(winners):
+            payout = share + (remainder if idx == 0 else 0)
+            winner.currentBalance += payout
+            print(f"{winner.username} wins {payout} from the pot at Showdown!")
+
+        for p in self.active_players:
+            p.isPlayerTurn = False
+            p.isFolded = False
+            User.UpdateUserBalance(p.username, p.currentBalance)
+
+        self.roundStage = RoundStage.FINISHED
+    
     def get_state_for_player(self, viewer_player):
         """
         Converts the current Round state into a JSON-friendly dictionary
@@ -204,7 +231,7 @@ class Round:
         players_info = []
         for p in self.active_players:
             # Show actual cards ONLY if this is the viewer OR if we reached Showdown
-            if p.username == viewer_player.username or self.roundStage == RoundStage.SHOWDOWN:
+            if p.username == viewer_player.username or self.roundStage in (RoundStage.SHOWDOWN,RoundStage.FINISHED):
                 hand_str = [str(c) for c in p.currentHand]
             else:
                 hand_str = ["Hidden" for _ in p.currentHand]
