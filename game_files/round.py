@@ -14,6 +14,18 @@ class RoundStage(enum.Enum):
     FINISHED = "Finished"
 
 class Round:
+
+    hand_names = {
+         0: "High Card",
+         1: "One Pair",
+         2: "Two Pair",
+         3: "Three of a Kind",
+         4: "Straight",
+         5: "Flush",
+         6: "Full House",
+         7: "Four of a Kind",
+         8: "Straight Flush"
+     }
     
     def __init__(self, table: Table):
         self.roundStage = RoundStage.PRE_FLOP
@@ -23,6 +35,7 @@ class Round:
         self.active_players = [player for player in table.players]
         self.currentPlayerTurnIndex = 0
         self.playersActedThisStreet = set()
+        self.winner_message = None
 
     def start_round(self):
         if len(self.active_players) < 2:
@@ -173,7 +186,8 @@ class Round:
         unfolded_players = [p for p in self.active_players if not p.isFolded]
         if len(unfolded_players) <= 1:
             winner = unfolded_players[0]
-            print(f"{winner.username} wins the pot of {self.pot}!")
+            self.winner_message = f"{winner.username} wins the pot of {self.pot} (everyone else folded)!"
+            print(self.winner_message)
             winner.currentBalance += self.pot
 
             for p in self.active_players:
@@ -230,7 +244,9 @@ class Round:
             for p in unfolded_players
         }
         best_score = max(player_scores.values())
+        winning_hand_name = self.hand_names[best_score[0]]
         winners = [p for p, score in player_scores.items() if score == best_score]
+        winner_names = []
 
         share = self.pot // len(winners)
         remainder = self.pot % len(winners)
@@ -238,7 +254,12 @@ class Round:
         for idx, winner in enumerate(winners):
             payout = share + (remainder if idx == 0 else 0)
             winner.currentBalance += payout
-            print(f"{winner.username} wins {payout} from the pot at Showdown!")
+            winner_names.append(f"{winner.username} (+{payout})")
+
+        self.winner_message =(
+            f"SHOWDOWN: {','.join(winner_names)} won the pot of {self.pot} with {winning_hand_name}!"
+        )
+        print(self.winner_message)
 
         for p in self.active_players:
             p.isPlayerTurn = False
@@ -285,7 +306,8 @@ class Round:
             "current_bet": self.current_bet,
             "current_turn": current_player.username if current_player else None,
             "community_cards": community_cards,
-            "players": players_info
+            "players": players_info,
+            "winner_message": self.winner_message
         }
 
     def remove_folded_players(self):
@@ -305,6 +327,8 @@ class Round:
         unfolded_players = [p for p in self.active_players if not p.isFolded]
         if len(unfolded_players) <= 1:
             winner = unfolded_players[0]
+            self.winner_message = f"{winner.username} wins the pot of {self.pot} (everyone else folded)!"
+            print(self.winner_message)
             winner.currentBalance += self.pot
             for p in self.active_players:
                 p.isPlayerTurn = False

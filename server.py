@@ -235,12 +235,12 @@ def handle_client(client_socket,client_address):
 
                         current_round.handle_player_action(current_player, move, amount)
 
-                        action_text = f"{current_player.username} chose {move}" + (f"({amount})"if amount else "")
+                        action_text = f"{current_player.username} chose {move} ({amount})"
+                        if current_round.roundStage == RoundStage.FINISHED and current_round.winner_message:
+                            action_text += f" | {current_round.winner_message}"
+
                        
-                        broadcast_game_state(
-                            table_name,
-                            f"{current_player.username} chose {move} ({amount})"
-                        )
+                        broadcast_game_state(table_name,action_text)
 
                         if current_round.roundStage == RoundStage.FINISHED:
                             del active_rounds[table_name]
@@ -297,8 +297,11 @@ def handle_client(client_socket,client_address):
 
 def send_to_client(client_socket, payload_dict):
     """Sends a JSON dictionary to a single client."""
-    message = json.dumps(payload_dict) + "\n"
-    client_socket.send(message.encode("utf-8"))
+    try:
+        message = json.dumps(payload_dict) + "\n"
+        client_socket.send(message.encode("utf-8"))
+    except (ConnectionResetError,ConnectionAbortedError,BrokenPipeError):
+        pass
 
 def broadcast_to_table(table_name, payload_dict):
     """Sends a JSON dictionary to EVERY player currently sitting at a specific table."""
