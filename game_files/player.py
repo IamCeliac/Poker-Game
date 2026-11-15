@@ -1,37 +1,27 @@
-from game_files.card import Card, Deck
-from user_files.user import User
-from game_files.table import Table
+from game_files.card import Card
+from game_files.deck import Deck
 
-class Player(User):
 
-    def __init__(self):
-        self.playerName = super().GetUsername()
-        self.currentBalance = super().GetUserBalance(self.playerName)
+class Player:
+
+    def __init__(self,username,balance):
+        self.username = username
+        self.currentBalance = balance
+        self.currentTableName = ''
         self.isPlayerTurn = False
         self.isFolded = False
-        self.table = None
-        self.currentHand = []
-
-
-    def CreateTable(self, tableName):
-        self.table = Table(tableName)
-        self.table.add_player(self)
-
-    def DeleteTable(self):
-        if self.table is not None:
-            self.table.remove_player(self)
-            self.table = None
-        else:
-            raise ValueError("Player Did Not Create Any Table.")
+        self.isTableCreated = False
+        self.isLoggedIn = True
+        self.currentHand: list[Card] = []
 
 
     def PlaceBet(self, betAmount):
-        if self.isPlayerTurn is False or self.isFolded is True:
+        if not self.isPlayerTurn or self.isFolded:
             raise ValueError("Player cannot place a bet at this time.")
-        if betAmount > self.currentBalance and self.currentBalance > 0:
+        if betAmount <= 0:
+            raise ValueError("Bet amound should be greater than 0")
+        if betAmount > self.currentBalance:
             raise ValueError("Insufficient balance to place the bet.")
-        if self.isFolded:
-            raise ValueError("Player has folded and cannot place a bet.")
         self.currentBalance -= betAmount
         return betAmount
 
@@ -68,19 +58,88 @@ class Player(User):
         self.currentBalance = 0
         return allInAmount
 
-    def AddToDeck(self, card):
-        self.currentDeck.cards.append(card)
+    def CreateTable(self, tableName):
 
-    def RemoveFromDeck(self, card):
-        if card in self.currentDeck.cards:
-            self.currentDeck.cards.remove(card)
+        from game_files.game import Game
+        from game_files.table import Table
+
+        if not self.isTableCreated:
+            if Game.GetTableByName(tableName) is not None:
+                raise ValueError("Table already exists!")
+            
+            self.currentTableName = tableName
+            table = Table(tableName,self.username)
+            table.add_player(self)
+            Game.openTables.append(table)
+            self.isTableCreated = True
+            return table
+        else: 
+            raise ValueError("Player Already Created Table!")
+
+    def ChangeUsername(self,username, newUsername):
+        from user_files.user import User
+        self.username = newUsername
+        User.UpdateUsername(username,newUsername)
+        print(f"Username: {username} updated to {newUsername} successfully")
+
+    def ChangePassword(self,currentPassword,newPassword):
+        from user_files.user import User
+        User.UpdateUserPassword(self.username,currentPassword,newPassword)
+        print(f"User:{self.username} password updated successfully!")
+
+    
+    def DeleteTable(self, tableName=None):
+        from game_files.game import Game
+
+        target_tableName = tableName or self.currentTableName
+        tableToRemove = Game.GetTableByName(target_tableName)
+
+        if tableToRemove is None:
+            raise ValueError("Table doesn't exist")
+
+        if tableToRemove.creator != self.username or not self.isTableCreated:
+            raise ValueError("You can only delete your table!")
+
+        for p in list(tableToRemove.players):
+            p.currentTableName = ""
+            tableToRemove.remove_player(p)
+
+        if tableToRemove in Game.openTables:
+            Game.openTables.remove(tableToRemove)
+
+        self.isTableCreated = False
+        if self.currentTableName == target_tableName:
+            self.currentTableName = ""
+
+
+    def RemovePlayerFromTable(self):
+        from game_files.game import Game
+
+        for table in list(Game.openTables):
+            if table.tableName == self.currentTableName:
+                table.remove_player(self)
+                self.currentTableName = ''
+                if table not in Game.openTables and table.creator == self.username:
+                    self.isTableCreated = False
+                return table
+
+    def AddToHand(self, card):
+        self.currentHand.append(card)
+
+    def RemoveFromHand(self, card):
+        if card in self.currentHand:
+            self.currentHand.remove(card)
         else:
             raise ValueError("Card not found in the player's deck.")
 
     def ExitGame(self):
+
         self.isPlayerTurn = False
         self.isFolded = False
-        self.currentDeck.cards.clear()
+        self.currentHand.clear()
+
+
+    
 
     
        
